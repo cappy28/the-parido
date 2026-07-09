@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon profil — Le Tableau</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand" style="cursor:pointer;" onclick="window.location.href='/dashboard.html'"><span class="dot"></span> LE TABLEAU</div>
+  <button class="btn btn-ghost btn-small" id="logoutBtn">Déconnexion</button>
+</div>
+
+<div class="wrap-narrow" style="padding-top: 2rem; padding-bottom: 3rem;">
+  <a href="/dashboard.html" style="font-size:0.85rem; text-decoration:none;">← Mes groupes</a>
+  <h2 style="margin: 0.8rem 0 1.4rem;">Mon profil</h2>
+
+  <div id="errorBox" class="error-box hidden"></div>
+  <div id="successBox" class="success-box hidden"></div>
+
+  <div class="panel" style="text-align:center;">
+    <div id="avatarPreview" class="avatar" style="width:110px; height:110px; font-size:2.2rem; margin: 0 auto 1rem;"></div>
+    <h3 id="pseudoDisplay" style="margin-bottom:1.2rem;"></h3>
+
+    <div style="display:flex; gap:0.6rem; justify-content:center; flex-wrap:wrap;">
+      <label class="btn btn-primary" style="cursor:pointer;">
+        Changer la photo
+        <input id="avatarInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden">
+      </label>
+      <button class="btn btn-ghost" id="removeAvatarBtn">Retirer la photo</button>
+    </div>
+    <p style="font-size:0.8rem; margin-top:1rem;">JPEG, PNG ou WebP. Recadrée automatiquement en carré.</p>
+  </div>
+</div>
+
+<script type="module">
+import { api, getUser, getToken, saveSession, clearSession, requireSession, avatarHTML, escapeHTML } from '/js/api.js';
+import { fileToAvatarDataUrl } from '/js/imageUtils.js';
+
+requireSession();
+let me = getUser();
+
+function render() {
+  document.getElementById('pseudoDisplay').textContent = me.pseudo;
+  const box = document.getElementById('avatarPreview');
+  if (me.avatarUrl) {
+    box.innerHTML = '';
+    box.style.backgroundImage = `url(${me.avatarUrl})`;
+    box.style.backgroundSize = 'cover';
+    box.style.backgroundPosition = 'center';
+  } else {
+    box.style.backgroundImage = 'none';
+    box.textContent = me.pseudo.charAt(0).toUpperCase();
+  }
+}
+render();
+
+document.getElementById('logoutBtn').addEventListener('click', () => { clearSession(); window.location.href = '/index.html'; });
+
+const errorBox = document.getElementById('errorBox');
+const successBox = document.getElementById('successBox');
+function showError(msg) { errorBox.textContent = msg; errorBox.classList.remove('hidden'); successBox.classList.add('hidden'); }
+function showSuccess(msg) { successBox.textContent = msg; successBox.classList.remove('hidden'); errorBox.classList.add('hidden'); }
+
+document.getElementById('avatarInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const dataUrl = await fileToAvatarDataUrl(file);
+    const { user } = await api('/users/avatar', { method: 'POST', body: { imageBase64: dataUrl } });
+    me = { ...me, avatarUrl: user.avatarUrl };
+    saveSession(getToken(), me);
+    render();
+    showSuccess('Photo mise à jour !');
+  } catch (err) { showError(err.message); }
+});
+
+document.getElementById('removeAvatarBtn').addEventListener('click', async () => {
+  try {
+    const { user } = await api('/users/avatar', { method: 'DELETE' });
+    me = { ...me, avatarUrl: user.avatarUrl };
+    saveSession(getToken(), me);
+    render();
+    showSuccess('Photo retirée.');
+  } catch (err) { showError(err.message); }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Le Tableau — pronostics entre potes</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> LE TABLEAU</div>
+</div>
+
+<div class="wrap" style="padding-top: 3rem; padding-bottom: 2rem;">
+  <h1>Le tableau des cotes<br>de ta classe.</h1>
+  <p style="max-width: 480px; font-size: 1.05rem;">
+    Crée un groupe, invite tes potes, pronostiquez ensemble avec des points virtuels.
+    Aucune carte bancaire, aucun argent réel — juste la cagnotte, le classement, et le droit de frimer.
+  </p>
+
+  <div class="panel" style="max-width: 420px; margin-top: 1rem;">
+    <div class="board-card" style="margin: -1.2rem -1.3rem 1rem; border-radius: 14px 14px 0 0; border-bottom: none;">
+      <div class="board-meta" style="margin-bottom:0.6rem;">EXEMPLE — TABLEAU EN DIRECT</div>
+      <div class="option-row won">
+        <div class="option-top">
+          <span class="option-label">🏆 Kevin arrive en retard demain</span>
+          <span class="option-nums"><span class="odds">x1.8</span> · 620 pts</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width: 62%"></div></div>
+      </div>
+      <div class="option-row lost">
+        <div class="option-top">
+          <span class="option-label">Kevin est à l'heure</span>
+          <span class="option-nums">x2.6 · 380 pts</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width: 38%"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap-narrow">
+  <div class="panel">
+    <div class="tabs">
+      <button class="tab-btn active" id="tabLogin" type="button">Connexion</button>
+      <button class="tab-btn" id="tabRegister" type="button">Créer un compte</button>
+    </div>
+
+    <div id="errorBox" class="error-box hidden"></div>
+
+    <form id="loginForm">
+      <div class="field">
+        <label for="loginPseudo">Pseudo</label>
+        <input id="loginPseudo" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="loginPassword">Mot de passe</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-primary" style="width:100%" type="submit">Se connecter</button>
+    </form>
+
+    <form id="registerForm" class="hidden">
+      <div class="field">
+        <label for="regPseudo">Pseudo</label>
+        <input id="regPseudo" autocomplete="username" minlength="3" required>
+      </div>
+      <div class="field">
+        <label for="regPassword">Mot de passe</label>
+        <input id="regPassword" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <div class="field">
+        <label for="regAvatarInput">Photo de profil (optionnel)</label>
+        <div style="display:flex; align-items:center; gap:0.8rem;">
+          <div id="regAvatarPreview" class="avatar" style="width:52px;height:52px;">?</div>
+          <input id="regAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" style="padding:0.4rem;">
+        </div>
+      </div>
+      <button class="btn btn-primary" style="width:100%" type="submit">Créer mon compte</button>
+    </form>
+  </div>
+</div>
+
+<footer>Le Tableau — points virtuels uniquement, sans valeur monétaire réelle.</footer>
+
+<script type="module">
+import { api, saveSession, getToken } from '/js/api.js';
+import { fileToAvatarDataUrl } from '/js/imageUtils.js';
+
+if (getToken()) window.location.href = '/dashboard.html';
+
+const tabLogin = document.getElementById('tabLogin');
+const tabRegister = document.getElementById('tabRegister');
+const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
+const errorBox = document.getElementById('errorBox');
+
+function showError(msg) {
+  errorBox.textContent = msg;
+  errorBox.classList.remove('hidden');
+}
+function clearError() {
+  errorBox.classList.add('hidden');
+}
+
+tabLogin.addEventListener('click', () => {
+  tabLogin.classList.add('active'); tabRegister.classList.remove('active');
+  loginForm.classList.remove('hidden'); registerForm.classList.add('hidden');
+  clearError();
+});
+tabRegister.addEventListener('click', () => {
+  tabRegister.classList.add('active'); tabLogin.classList.remove('active');
+  registerForm.classList.remove('hidden'); loginForm.classList.add('hidden');
+  clearError();
+});
+
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearError();
+  try {
+    const data = await api('/auth/login', {
+      method: 'POST',
+      body: {
+        pseudo: document.getElementById('loginPseudo').value,
+        password: document.getElementById('loginPassword').value,
+      },
+    });
+    saveSession(data.token, data.user);
+    window.location.href = '/dashboard.html';
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+let regAvatarDataUrl = null;
+const regAvatarPreview = document.getElementById('regAvatarPreview');
+document.getElementById('regAvatarInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    regAvatarDataUrl = await fileToAvatarDataUrl(file);
+    regAvatarPreview.innerHTML = '';
+    regAvatarPreview.style.backgroundImage = `url(${regAvatarDataUrl})`;
+    regAvatarPreview.style.backgroundSize = 'cover';
+    regAvatarPreview.style.backgroundPosition = 'center';
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+registerForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearError();
+  try {
+    const data = await api('/auth/register', {
+      method: 'POST',
+      body: {
+        pseudo: document.getElementById('regPseudo').value,
+        password: document.getElementById('regPassword').value,
+        avatarBase64: regAvatarDataUrl || undefined,
+      },
+    });
+    saveSession(data.token, data.user);
+    window.location.href = '/dashboard.html';
+  } catch (err) {
+    showError(err.message);
+  }
+});
+</script>
+</body>
+</html>
