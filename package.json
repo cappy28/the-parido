@@ -1,6 +1,9 @@
 {
   "name": "le-tableau",
   "version": "1.0.0",
+  "engines": {
+  "node": "18.x"
+  }
   "private": true,
   "description": "Pronostics entre potes, en points virtuels — groupes par classe, validation admin, cagnotte mutuelle.",
   "type": "module",
