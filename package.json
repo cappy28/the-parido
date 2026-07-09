@@ -1,0 +1,23 @@
+{
+  "name": "le-tableau",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pronostics entre potes, en points virtuels — groupes par classe, validation admin, cagnotte mutuelle.",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "postinstall": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "@vercel/blob": "^2.0.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "prisma": "^5.20.0"
+  }
+}
