@@ -5,7 +5,7 @@
   "description": "Pronostics entre potes, en points virtuels — groupes par classe, validation admin, cagnotte mutuelle.",
   "type": "module",
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "vercel dev",
