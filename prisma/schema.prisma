@@ -1,0 +1,234 @@
+// Le Tableau — schéma de base de données
+// Économie de points virtuels PAR GROUPE (pas d'argent réel, pas de valeur monétaire).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum MembershipStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BetStatus {
+  OPEN
+  CLOSED
+  RESOLVED
+  CANCELLED
+}
+
+enum BetSource {
+  MANUAL // créé à la main par un membre
+  AUTO   // généré automatiquement depuis un fournisseur de données sportives
+}
+
+enum TxType {
+  BONUS       // solde de départ à l'approbation
+  WAGER       // mise placée (débit)
+  PAYOUT      // gain distribué (crédit)
+  REFUND      // remboursement (pari annulé / personne n'a gagné / achat annulé)
+  PURCHASE    // achat dans la boutique (débit)
+  ADJUSTMENT  // ajustement manuel par un admin
+}
+
+enum PurchaseStatus {
+  PENDING
+  FULFILLED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  pseudo       String   @unique
+  email        String?  @unique
+  passwordHash String
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+
+  memberships     Membership[]
+  createdGroups   Group[]      @relation("GroupCreator")
+  createdBets     BetEvent[]   @relation("BetCreator")
+  wagers          Wager[]
+  purchases       Purchase[]
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  inviteCode  String   @unique
+  creatorId   String
+  creator     User     @relation("GroupCreator", fields: [creatorId], references: [id])
+  createdAt   DateTime @default(now())
+
+  members      Membership[]
+  bets         BetEvent[]
+  competitions GroupCompetition[]
+  shopItems    ShopItem[]
+  purchases    Purchase[]
+
+  @@index([creatorId])
+}
+
+// Une compétition (ligue/tournoi) qu'un groupe suit pour la génération automatique de paris.
+model GroupCompetition {
+  id            String   @id @default(cuid())
+  groupId       String
+  provider      String   // "api-football" | "api-basketball" | "pandascore" | ...
+  sport         String   // "FOOTBALL" | "BASKETBALL" | "ESPORTS" | ...
+  competitionId String   // id externe chez le fournisseur (league id, PandaScore league id...)
+  season        String?  // ex: "2025" — utilisé par api-football / api-basketball
+  label         String   // nom affiché, ex: "Ligue 1"
+  daysAhead     Int      @default(7)
+  enabled       Boolean  @default(true)
+  lastSyncAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, provider, competitionId])
+  @@index([groupId])
+}
+
+// Une ligne par (utilisateur, groupe). Le solde de points est ICI :
+// chaque groupe a sa propre économie, isolée des autres groupes.
+model Membership {
+  id        String           @id @default(cuid())
+  groupId   String
+  userId    String
+  role      Role             @default(MEMBER)
+  status    MembershipStatus @default(PENDING)
+  balance   Int              @default(0)
+  joinedAt  DateTime         @default(now())
+
+  group        Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wagers       Wager[]
+  transactions WalletTransaction[]
+  purchases    Purchase[]
+
+  @@unique([groupId, userId])
+  @@index([groupId, status])
+}
+
+model BetEvent {
+  id               String    @id @default(cuid())
+  groupId          String
+  creatorId        String
+  title            String
+  description      String?
+  status           BetStatus @default(OPEN)
+  closesAt         DateTime?
+  resolvedOptionId String?
+  createdAt        DateTime  @default(now())
+  resolvedAt       DateTime?
+
+  source     BetSource @default(MANUAL)
+  provider   String?   // fournisseur d'origine si source=AUTO
+  externalId String?   // id du match chez le fournisseur (évite les doublons de sync)
+
+  group    Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  creator  User       @relation("BetCreator", fields: [creatorId], references: [id])
+  options  BetOption[]
+  wagers   Wager[]
+
+  @@unique([groupId, provider, externalId])
+  @@index([groupId, status])
+  @@index([source, status])
+}
+
+model BetOption {
+  id           String   @id @default(cuid())
+  betEventId   String
+  label        String
+  externalRole String?  // "HOME" | "AWAY" | "DRAW" — utilisé uniquement pour les paris AUTO
+
+  betEvent BetEvent @relation(fields: [betEventId], references: [id], onDelete: Cascade)
+  wagers   Wager[]
+
+  @@index([betEventId])
+}
+
+model Wager {
+  id           String   @id @default(cuid())
+  betEventId   String
+  optionId     String
+  membershipId String
+  userId       String
+  amount       Int
+  payout       Int?     // rempli après résolution (null tant que le pari est ouvert)
+  createdAt    DateTime @default(now())
+
+  betEvent   BetEvent   @relation(fields: [betEventId], references: [id], onDelete: Cascade)
+  option     BetOption  @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@index([betEventId, optionId])
+  @@index([membershipId])
+}
+
+model WalletTransaction {
+  id           String   @id @default(cuid())
+  membershipId String
+  type         TxType
+  amount       Int      // positif = crédit, négatif = débit
+  description  String?
+  createdAt    DateTime @default(now())
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, createdAt])
+}
+
+// Un article de la boutique du groupe. Défini librement par l'admin
+// (ex: "Amène les boissons la prochaine fois" à 500 pts, ou un badge cosmétique).
+model ShopItem {
+  id          String   @id @default(cuid())
+  groupId     String
+  name        String
+  description String?
+  cost        Int
+  stock       Int?     // null = illimité, sinon décrémenté à chaque achat
+  emoji       String   @default("🎁")
+  imageUrl    String?  // photo uploadée par l'admin — prioritaire sur l'emoji à l'affichage
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  group     Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  purchases Purchase[]
+
+  @@index([groupId, active])
+}
+
+model Purchase {
+  id           String         @id @default(cuid())
+  shopItemId   String
+  membershipId String
+  userId       String
+  groupId      String
+  itemName     String         // copie du nom au moment de l'achat (survit si l'item est modifié)
+  costPaid     Int
+  status       PurchaseStatus @default(PENDING)
+  createdAt    DateTime       @default(now())
+  fulfilledAt  DateTime?
+
+  shopItem   ShopItem   @relation(fields: [shopItemId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+  group      Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, status])
+  @@index([membershipId])
+}
