@@ -8,6 +8,7 @@
     "node": "24.x"
   },
   "scripts": {
+    "build": "prisma generate && prisma db push --accept-data-loss",
     "dev": "vercel dev",
     "postinstall": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
