@@ -1,0 +1,11 @@
+{
+  "outputDirectory": "web",
+  "buildCommand": "npm run build",
+  "functions": {
+    "api/cron/*.js": { "maxDuration": 60 }
+  },
+  "crons": [
+    { "path": "/api/cron/sync-fixtures", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/resolve-fixtures", "schedule": "0 23 * * *" }
+  ]
+}
